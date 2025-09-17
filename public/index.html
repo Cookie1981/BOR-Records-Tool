@@ -1,0 +1,1850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Archery Scores – Bulk Uploader</title>
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root{--gap:14px;--radius:14px;--shadow:0 6px 24px rgba(0,0,0,.08)}
+    *{box-sizing:border-box} body{font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin:0; color:#111}
+    header{padding:22px 18px; border-bottom:1px solid #eee; position:sticky; top:0; background:#fff; z-index:10}
+    h1{font-size:20px; margin:0 0 6px} .sub{color:#555; font-size:13px}
+    main{padding:18px; display:grid; gap:var(--gap); max-width:1100px; margin:0 auto}
+    .card{border:1px solid #eee; border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); background:#fff}
+    .row{display:grid; gap:10px; grid-template-columns:1fr 1fr}
+    @media (max-width:900px){.row{grid-template-columns:1fr}}
+    label{display:block; font-weight:600; margin:6px 0}
+    input[type="text"], input[type="password"], input[type="url"], input[type="date"], textarea, select{width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:10px; font:inherit}
+    .muted{color:#666; font-size:13px}
+    .cols2{display:grid; gap:12px; grid-template-columns:1fr 1fr}
+    .btn{appearance:none; border:0; border-radius:12px; padding:11px 14px; font-weight:700; cursor:pointer; box-shadow:var(--shadow); background:#111; color:#fff}
+    .btn[disabled]{opacity:.5; cursor:not-allowed}
+    .inline{display:inline-flex; align-items:center; gap:8px}
+    .small{font-size:13px}
+    .okay{color:#0a7}
+    .warn{color:#b60}
+    .bad{color:#c00}
+    .chip{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #e5e5e5; border-radius:999px; font-size:12px}
+    .grid{display:grid; gap:var(--gap)}
+    code{background:#f6f6f6; border:1px solid #eee; padding:2px 6px; border-radius:6px}
+    .progress{height:8px; background:#eee; border-radius:999px; overflow:hidden}
+    .bar{height:8px; width:0; background:#111; transition:width 0.3s ease}
+    .flex{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .status-box{background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:12px; margin-top:10px}
+    .table{width:100%; border-collapse:collapse; font-size:14px}
+    .table th,.table td{border:1px solid #eee; padding:6px 8px; text-align:left}
+    .invalid { background-color: #ffcccc; color: #d33; }
+    .defaulted { background-color: #e8f5e8; color: #2d7d2d; }
+    .chip.warning { background-color: #fff3cd; color: #856404; border-color: #ffeaa7; }
+    .legend { display: flex; gap: 16px; align-items: center; font-size: 13px; margin: 8px 0; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-sample { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #ddd; }
+  </style>
+</head>
+<body>
+  <header>
+<!--    <h1>🏹 Archery Scores – Bulk Uploader</h1>-->
+<!--    <div class="sub">Select Excel file → set date filter → upload scores automatically. Backend handles Excel processing and duplicate prevention.</div>-->
+  </header>
+
+  <main>
+    <!-- Configuration -->
+    <section class="card grid">
+      <h3>Configuration</h3>
+      <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 14px; margin: 0; white-space: nowrap;">Member:</label>
+          <select id="defaultMember" style="margin: 0;">
+            <option value="1e120c95-9714-4105-a011-740552425edf|m">Matt</option>
+            <option value="6e0e70e4-38f6-4b1a-936f-1346772ebe19|f">Kerry</option>
+            <option value="4086e2f0-87b6-45e7-8a41-4cfcc78e2009|m">Dave</option>
+          </select>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 14px; margin: 0; white-space: nowrap;">Class:</label>
+          <select id="defaultClass" style="margin: 0;">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 14px; margin: 0; white-space: nowrap;">Category:</label>
+          <select id="defaultAgeGroup" style="margin: 0;">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+        <label class="inline" style="font-size: 14px; margin: 0; white-space: nowrap;"><input type="checkbox" id="remember" checked /> Remember</label>
+        <button class="btn small" id="clearLocal" style="margin: 0; padding: 4px 8px;">Clear</button>
+        <span class="chip" id="serverStatus" style="margin-left: auto;">🔴 Checking backend...</span>
+      </div>
+    </section>
+
+    <!-- File Selection and Processing -->
+    <section class="card grid">
+      <h3>Excel File Processing</h3>
+      <div class="row">
+        <div>
+          <label>Select Excel File</label>
+          <input id="excelFile" type="file" accept=".xlsx" />
+          <div class="muted small" id="fileStatus"></div>
+        </div>
+        <div>
+          <label>Upload records from date</label>
+          <input id="fromDate" type="date" />
+          <div class="muted small"></div>
+        </div>
+      </div>
+      
+<!--      <div class="muted small">-->
+<!--        <strong>Required columns in 'Scores' sheet:</strong>-->
+<!--        <code>date</code>, <code>score</code>, <code>location</code>, <code>status</code>, <code>qualifying</code>, <code>record_qualifying</code>, <code>record_status</code>.-->
+<!--        <br><strong>Optional:</strong> <code>round_id</code>, <code>class_id</code>, <code>age_group_id</code>, <code>10s</code>, <code>xs</code>, <code>hits</code>, <code>notes</code>.-->
+<!--        <br>The <code>uploaded</code> column will be added/updated automatically to track processed records.-->
+<!--      </div>-->
+
+      <div class="flex">
+        <!-- processBtn removed - upload now handled directly from preview -->
+        <!-- serverStatus moved to Configuration section -->
+      </div>
+      
+      <div class="progress"><div class="bar" id="progressBar"></div></div>
+    </section>
+
+    <!-- Preview Section -->
+    <section class="card grid" id="previewSection" style="display:none">
+      <div class="flex">
+        <strong>Preview of what will be uploaded</strong>
+        <div class="chip" id="previewStatus">✅ Ready</div>
+      </div>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-sample" style="background-color: #ffcccc;"></div>
+          <span>Validation errors</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-sample" style="background-color: #e8f5e8;"></div>
+          <span>Auto-filled defaults</span>
+        </div>
+      </div>
+      <div id="preview"></div>
+      <div class="muted small" id="validationSummary"></div>
+    </section>
+
+    <!-- Results -->
+    <section class="card grid" id="resultsSection" style="display:none">
+      <h3>Results</h3>
+      <div id="statusDisplay" class="status-box"></div>
+      <div id="errorDetails"></div>
+    </section>
+  </main>
+
+  <script>
+    // Configuration
+    const CONFIG = {
+      apiBase: 'http://localhost:3000'
+      // Note: authBasicToken and memberId are now user inputs for security
+    };
+
+    // Local storage keys
+    const LSK = {
+      cls: 'archery_defaultClass',
+      age: 'archery_defaultAge',
+      lastUpload: 'archery_lastUploadDate'
+    };
+
+    // State
+    const state = {
+      selectedFilePath: null,
+      processing: false,
+      rawRows: [], // Store original unfiltered data
+      rows: [], // Store currently filtered/displayed data
+      lookups: {
+        rounds: null,
+        roundsLoading: false,
+        roundsError: null,
+        classes: null,
+        classesLoading: false,
+        classesError: null,
+        ageGroups: null,
+        ageGroupsLoading: false,
+        ageGroupsError: null
+      }
+    };
+
+    // DOM helpers
+    const $ = sel => document.querySelector(sel);
+
+    // Rounds API validation
+    async function fetchRoundsLookup() {
+      if (state.lookups.rounds) {
+        return state.lookups.rounds; // Return cached data if available
+      }
+
+      if (state.lookups.roundsLoading) {
+        // Wait for existing fetch to complete
+        while (state.lookups.roundsLoading) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        return state.lookups.rounds;
+      }
+
+      try {
+        state.lookups.roundsLoading = true;
+        state.lookups.roundsError = null;
+
+        console.log('Fetching rounds lookup data from API...');
+        const response = await fetch('/api/rounds');
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const roundsData = await response.json();
+        console.log('Rounds lookup data fetched:', roundsData);
+        console.log('🔍 SAMPLE ROUND OBJECT (first 3):', roundsData.slice(0, 3));
+        console.log('🔍 FIRST ROUND OBJECT KEYS:', roundsData[0] ? Object.keys(roundsData[0]) : 'No data');
+        console.log('🔍 FIRST ROUND OBJECT FULL:', roundsData[0]);
+
+        // Store the rounds data (assuming it's an array of objects with id field)
+        state.lookups.rounds = roundsData;
+
+        return roundsData;
+      } catch (error) {
+        console.error('Failed to fetch rounds lookup:', error);
+        state.lookups.roundsError = error.message;
+
+        // Return empty array as fallback - validation will treat all round_ids as valid
+        state.lookups.rounds = [];
+        return [];
+      } finally {
+        state.lookups.roundsLoading = false;
+      }
+    }
+
+    function isValidRoundId(roundId) {
+      console.log('🔍 VALIDATION CALL - isValidRoundId:', { input: roundId, type: typeof roundId, empty: !roundId });
+      if (!roundId || roundId.trim() === '') {
+        console.log('🔍 isValidRoundId RESULT: FALSE (empty)');
+        return false; // Empty round_id is invalid (required field)
+      }
+
+      const rounds = state.lookups.rounds;
+      if (!rounds) {
+        // If rounds data not loaded, treat as valid to avoid false negatives
+        console.warn('Rounds lookup data not available, treating round_id as valid:', roundId);
+        return true;
+      }
+
+      if (rounds.length === 0 && state.lookups.roundsError) {
+        // API failed, fall back to basic validation - just check if not empty
+        console.warn('Rounds API failed, falling back to basic round_id validation');
+        return true;
+      }
+
+      // Check if round_id exists in the fetched rounds data
+      const isValid = rounds.some(round => 
+        round.id === roundId || 
+        round.round_id === roundId || 
+        round.uuid === roundId ||
+        String(round.id) === String(roundId)
+      );
+
+      if (!isValid) {
+        console.log('Invalid round_id not found in API data:', roundId, 'Available rounds:', rounds.length);
+      }
+
+      return isValid;
+    }
+
+    // Classes API validation  
+    async function fetchClassesLookup() {
+      console.log('🔍 fetchClassesLookup() CALLED - checking cache...');
+      console.log('🔍 state.lookups.classes exists?', !!state.lookups.classes);
+      if (state.lookups.classes) {
+        console.log('🔍 Returning cached classes data:', state.lookups.classes.length, 'items');
+        return state.lookups.classes; // Return cached data if available
+      }
+
+      if (state.lookups.classesLoading) {
+        // Wait for existing fetch to complete
+        while (state.lookups.classesLoading) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        return state.lookups.classes;
+      }
+
+      try {
+        state.lookups.classesLoading = true;
+        state.lookups.classesError = null;
+        
+        console.log('Fetching classes lookup data from API (/api/classes with class_archived=false)...');
+        const response = await fetch('/api/classes');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const classesData = await response.json();
+        console.log('Classes lookup data fetched:', classesData);
+        console.log('🔍 SAMPLE CLASS OBJECT (first 3):', classesData.slice(0, 3));
+        console.log('🔍 FIRST CLASS OBJECT KEYS:', classesData[0] ? Object.keys(classesData[0]) : 'No data');
+        console.log('🔍 FIRST CLASS OBJECT FULL:', classesData[0]);
+        
+        state.lookups.classes = classesData;
+        return classesData;
+      } catch (error) {
+        console.error('Failed to fetch classes lookup:', error);
+        state.lookups.classesError = error.message;
+        
+        // Return empty array as fallback - validation will treat all class_ids as valid
+        state.lookups.classes = [];
+        return [];
+      } finally {
+        state.lookups.classesLoading = false;
+      }
+    }
+
+    function isValidClassId(classId) {
+      console.log('🔍 VALIDATION CALL - isValidClassId:', { input: classId, type: typeof classId, empty: !classId });
+      if (!classId || classId.trim() === '') {
+        console.log('🔍 isValidClassId RESULT: FALSE (empty)');
+        return false; // Empty class_id is invalid (required field)
+      }
+
+      const classes = state.lookups.classes;
+      if (!classes) {
+        // If classes data not loaded, treat as valid to avoid false negatives
+        console.warn('Classes lookup data not available, treating class_id as valid:', classId);
+        return true;
+      }
+
+      if (classes.length === 0 && state.lookups.classesError) {
+        // API failed, fall back to basic validation - just check if not empty
+        console.warn('Classes API failed, falling back to basic class_id validation');
+        return true;
+      }
+
+      // Check if class_id exists in the fetched classes data
+      const isValid = classes.some(cls => 
+        cls.id === classId || 
+        cls.class_id === classId || 
+        cls.uuid === classId ||
+        String(cls.id) === String(classId)
+      );
+
+      if (!isValid) {
+        console.log('Invalid class_id not found in API data:', classId, 'Available classes:', classes.length);
+      }
+
+      return isValid;
+    }
+
+    // Age Groups API validation
+    async function fetchAgeGroupsLookup() {
+      if (state.lookups.ageGroups) {
+        return state.lookups.ageGroups; // Return cached data if available
+      }
+
+      if (state.lookups.ageGroupsLoading) {
+        // Wait for existing fetch to complete
+        while (state.lookups.ageGroupsLoading) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        return state.lookups.ageGroups;
+      }
+
+      try {
+        state.lookups.ageGroupsLoading = true;
+        state.lookups.ageGroupsError = null;
+        
+        console.log('Fetching age groups lookup data from API...');
+        const response = await fetch('/api/categories');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const ageGroupsData = await response.json();
+        console.log('Age groups lookup data fetched:', ageGroupsData);
+        console.log('🔍 SAMPLE AGE GROUP OBJECT (first 3):', ageGroupsData.slice(0, 3));
+        console.log('🔍 FIRST AGE GROUP OBJECT KEYS:', ageGroupsData[0] ? Object.keys(ageGroupsData[0]) : 'No data');
+        console.log('🔍 FIRST AGE GROUP OBJECT FULL:', ageGroupsData[0]);
+        
+        state.lookups.ageGroups = ageGroupsData;
+        return ageGroupsData;
+      } catch (error) {
+        console.error('Failed to fetch age groups lookup:', error);
+        state.lookups.ageGroupsError = error.message;
+        
+        // Return empty array as fallback - validation will treat all age_group_ids as valid
+        state.lookups.ageGroups = [];
+        return [];
+      } finally {
+        state.lookups.ageGroupsLoading = false;
+      }
+    }
+
+    function isValidAgeGroupId(ageGroupId) {
+      console.log('🔍 VALIDATION CALL - isValidAgeGroupId:', { input: ageGroupId, type: typeof ageGroupId, empty: !ageGroupId });
+      if (!ageGroupId || ageGroupId.trim() === '') {
+        console.log('🔍 isValidAgeGroupId RESULT: FALSE (empty)');
+        return false; // Empty age_group_id is invalid (required field)
+      }
+
+      const ageGroups = state.lookups.ageGroups;
+      if (!ageGroups) {
+        // If age groups data not loaded, treat as valid to avoid false negatives
+        console.warn('Age groups lookup data not available, treating age_group_id as valid:', ageGroupId);
+        return true;
+      }
+
+      if (ageGroups.length === 0 && state.lookups.ageGroupsError) {
+        // API failed, fall back to basic validation - just check if not empty
+        console.warn('Age groups API failed, falling back to basic age_group_id validation');
+        return true;
+      }
+
+      // Check if age_group_id exists in the fetched age groups data (using correct field name: category_id)
+      const isValid = ageGroups.some(ageGroup => 
+        ageGroup.category_id === ageGroupId || 
+        ageGroup.age_group_id === ageGroupId || // Keep as fallback
+        ageGroup.id === ageGroupId || // Keep as fallback
+        ageGroup.uuid === ageGroupId || // Keep as fallback
+        String(ageGroup.category_id) === String(ageGroupId)
+      );
+
+      if (!isValid) {
+        console.log('Invalid age_group_id not found in API data:', ageGroupId, 'Available age groups:', ageGroups.length);
+      }
+
+      return isValid;
+    }
+
+    // Text name validation functions for new column format
+    function isValidRoundName(roundName) {
+      if (!roundName || roundName.trim() === '') {
+        return false; // Empty round name is invalid (required field)
+      }
+
+      const rounds = state.lookups.rounds;
+      if (!rounds) {
+        // If rounds data not loaded, treat as valid to avoid false negatives
+        console.warn('Rounds lookup data not available, treating round name as valid:', roundName);
+        return true;
+      }
+
+      if (rounds.length === 0 && state.lookups.roundsError) {
+        // API failed, fall back to basic validation - just check if not empty
+        console.warn('Rounds API failed, falling back to basic round name validation');
+        return true;
+      }
+
+      // Check if round name exists in the fetched rounds data (case-insensitive)
+      const isValid = rounds.some(round => 
+        round.round && round.round.toLowerCase() === roundName.toLowerCase()
+      );
+
+      if (!isValid) {
+        console.log('Invalid round name not found in API data:', roundName, 'Available rounds:', rounds.length);
+      }
+
+      return isValid;
+    }
+
+    function isValidClassName(className) {
+      if (!className || className.trim() === '') {
+        return false; // Empty class name is invalid (required field)
+      }
+
+      const classes = state.lookups.classes;
+      if (!classes) {
+        // If classes data not loaded, treat as valid to avoid false negatives
+        console.warn('Classes lookup data not available, treating class name as valid:', className);
+        return true;
+      }
+
+      if (classes.length === 0 && state.lookups.classesError) {
+        // API failed, fall back to basic validation - just check if not empty
+        console.warn('Classes API failed, falling back to basic class name validation');
+        return true;
+      }
+
+      // Check if class name exists in the fetched classes data (case-insensitive)
+      const isValid = classes.some(cls => 
+        cls.bow_class && cls.bow_class.toLowerCase() === className.toLowerCase()
+      );
+
+      if (!isValid) {
+        console.log('Invalid class name not found in API data:', className, 'Available classes:', classes.length);
+      }
+
+      return isValid;
+    }
+
+    function isValidCategoryName(categoryName) {
+      if (!categoryName || categoryName.trim() === '') {
+        return false; // Empty category name is invalid (required field)
+      }
+
+      const categories = state.lookups.ageGroups; // Using ageGroups which is actually categories
+      if (!categories) {
+        // If categories data not loaded, treat as valid to avoid false negatives
+        console.warn('Categories lookup data not available, treating category name as valid:', categoryName);
+        return true;
+      }
+
+      if (categories.length === 0 && state.lookups.ageGroupsError) {
+        // API failed, fall back to basic validation - just check if not empty
+        console.warn('Categories API failed, falling back to basic category name validation');
+        return true;
+      }
+
+      // Check if category name exists in the fetched categories data (case-insensitive)
+      const isValid = categories.some(cat => 
+        cat.category && cat.category.toLowerCase() === categoryName.toLowerCase()
+      );
+
+      if (!isValid) {
+        console.log('Invalid category name not found in API data:', categoryName, 'Available categories:', categories.length);
+      }
+
+      return isValid;
+    }
+
+    // Categories API for age configuration dropdown (active = true AND category_archived = false)
+    async function fetchCategoriesLookup() {
+      if (state.lookups.categories) {
+        return state.lookups.categories; // Return cached data if available
+      }
+
+      if (state.lookups.categoriesLoading) {
+        // Wait for existing fetch to complete
+        while (state.lookups.categoriesLoading) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        return state.lookups.categories;
+      }
+
+      try {
+        state.lookups.categoriesLoading = true;
+        state.lookups.categoriesError = null;
+        
+        console.log('Fetching categories lookup data from API (active=true AND category_archived=false)...');
+        const response = await fetch('/api/categories');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const categoriesData = await response.json();
+        console.log('Categories lookup data fetched:', categoriesData);
+        
+        state.lookups.categories = categoriesData;
+        return categoriesData;
+      } catch (error) {
+        console.error('Failed to fetch categories lookup:', error);
+        state.lookups.categoriesError = error.message;
+        
+        // Return empty array as fallback
+        state.lookups.categories = [];
+        return [];
+      } finally {
+        state.lookups.categoriesLoading = false;
+      }
+    }
+
+    // Dynamic date filtering function
+    function applyDateFilter() {
+      if (state.rawRows.length === 0) {
+        return; // No data to filter
+      }
+
+      const fromDate = $('#fromDate').value;
+      console.log(`Applying date filter: ${fromDate ? fromDate : 'NONE'}`);
+      
+      if (!fromDate) {
+        // No filter - show all raw data
+        state.rows = [...state.rawRows];
+      } else {
+        // Apply date filter
+        const filterDate = new Date(fromDate);
+        state.rows = state.rawRows.filter(row => {
+          if (!row.date) return false;
+          
+          const rowDate = parseExcelDate(row.date);
+          if (!rowDate) return false;
+          
+          return rowDate >= filterDate;
+        });
+      }
+      
+      console.log(`Filtered data: ${state.rows.length} records (from ${state.rawRows.length} total)`);
+      
+      // Update the preview
+      renderPreview();
+      
+      // Update status
+      const statusText = fromDate ? 
+        `Filtered ${state.rows.length} records (from ${state.rawRows.length} total)` :
+        `Showing all ${state.rows.length} records`;
+      $('#fileStatus').innerHTML = `<span class="okay">${statusText}</span>`;
+    }
+
+    // Populate class dropdown from API
+    async function populateClassDropdown() {
+      const dropdown = $('#defaultClass');
+      const savedClass = localStorage.getItem(LSK.cls);
+      
+      try {
+        // Show loading state
+        dropdown.innerHTML = '<option value="">Loading classes...</option>';
+        dropdown.disabled = true;
+        
+        // Fetch classes from API
+        const classes = await fetchClassesLookup();
+        
+        if (classes && classes.length > 0) {
+          // Clear loading state and populate with real options
+          dropdown.innerHTML = '';
+          
+          // Sort classes alphabetically by name
+          const sortedClasses = [...classes].sort((a, b) => a.bow_class.localeCompare(b.bow_class));
+
+          sortedClasses.forEach((cls, index) => {
+            const option = document.createElement('option');
+            option.value = cls.class_id;
+            option.textContent = cls.bow_class;
+            
+            // Restore saved selection, or default to Barebow
+            if (savedClass && cls.class_id === savedClass) {
+              option.selected = true;
+            } else if (!savedClass && cls.class_id === '17ac0f9f-7b14-4dd9-ad60-a28adf3cb419') {
+              option.selected = true;
+            }
+            
+            dropdown.appendChild(option);
+          });
+          
+          console.log(`Populated class dropdown with ${sortedClasses.length} options (sorted alphabetically, defaulted to: Barebow)`);
+        } else {
+          dropdown.innerHTML = '<option value="">No classes available</option>';
+        }
+      } catch (error) {
+        console.error('Failed to populate class dropdown:', error);
+        dropdown.innerHTML = '<option value="">Failed to load classes</option>';
+      } finally {
+        dropdown.disabled = false;
+      }
+    }
+
+    // Populate age group dropdown from categories API (active = false)
+    async function populateCategoryDropdown() {
+      const dropdown = $('#defaultAgeGroup');
+      const savedAge = localStorage.getItem(LSK.age);
+      
+      try {
+        // Show loading state
+        dropdown.innerHTML = '<option value="">Loading categories...</option>';
+        dropdown.disabled = true;
+        
+        // Fetch categories from API (active=false)
+        const categories = await fetchCategoriesLookup();
+        
+        if (categories && categories.length > 0) {
+          // Clear loading state and populate with real options
+          dropdown.innerHTML = '';
+          
+          // Sort categories alphabetically by name
+          const sortedCategories = [...categories].sort((a, b) => a.category.localeCompare(b.category));
+          
+          sortedCategories.forEach((category, index) => {
+            const option = document.createElement('option');
+            option.value = category.category_id;
+            option.textContent = category.category;
+            
+            // Restore saved selection, or default to first item
+            if (savedAge && category.category_id === savedAge) {
+              option.selected = true;
+            } else if (!savedAge && index === 0) {
+              option.selected = true;
+            }
+            
+            dropdown.appendChild(option);
+          });
+          
+          console.log(`Populated age dropdown with ${sortedCategories.length} categories (sorted alphabetically, defaulted to: ${sortedCategories[0].category})`);
+        } else {
+          // Fallback if no categories received
+          dropdown.innerHTML = '<option value="">No categories available</option>';
+        }
+      } catch (error) {
+        console.error('Failed to populate age dropdown:', error);
+        // Show error state with basic fallback
+        dropdown.innerHTML = '<option value="">Failed to load categories</option>';
+      } finally {
+        dropdown.disabled = false;
+      }
+    }
+
+    // Extract member ID and gender from member dropdown value
+    function getMemberInfo() {
+      const memberValue = $('#defaultMember').value;
+      if (!memberValue || !memberValue.includes('|')) {
+        return { memberId: null, gender: null };
+      }
+      
+      const parts = memberValue.split('|');
+      return {
+        memberId: parts[0] || null,
+        gender: parts[1] || null
+      };
+    }
+
+    // Handle member selection change - filter categories by gender
+    async function onMemberChange() {
+      const memberInfo = getMemberInfo();
+      console.log('Member selection changed:', memberInfo);
+      
+      if (memberInfo.gender) {
+        // Re-populate age dropdown with gender filtering
+        await populateAgeGroupDropdownWithGenderFilter(memberInfo.gender);
+      }
+    }
+
+    async function populateAgeGroupDropdownWithGenderFilter(filterGender = null) {
+      const dropdown = $('#defaultAgeGroup');
+      const savedAge = localStorage.getItem(LSK.age);
+      
+      try {
+        // Show loading state
+        dropdown.innerHTML = '<option value="">Loading categories...</option>';
+        dropdown.disabled = true;
+        
+        // Fetch categories from API
+        const categories = await fetchCategoriesLookup();
+        
+        if (categories && categories.length > 0) {
+          // Filter by gender if specified
+          let filteredCategories = categories;
+          if (filterGender) {
+            filteredCategories = categories.filter(cat => cat.gender === filterGender);
+            console.log(`Filtered categories by gender '${filterGender}': ${filteredCategories.length} of ${categories.length}`);
+          }
+          
+          // Clear loading state and populate with real options
+          dropdown.innerHTML = '';
+          
+          // Sort categories alphabetically by name
+          const sortedCategories = [...filteredCategories].sort((a, b) => a.category.localeCompare(b.category));
+          
+          let defaultSelected = false;
+          sortedCategories.forEach((category) => {
+            const option = document.createElement('option');
+            option.value = category.category_id;
+            option.textContent = category.category;
+            
+            // Priority order for selection:
+            // 1. Category with id '999' (always default after filtering)
+            // 2. Saved selection (if still valid after filtering)
+            // 3. First item in sorted list
+            if (category.category_id === '999') {
+              option.selected = true;
+              defaultSelected = true;
+            } else if (!defaultSelected && savedAge && category.category_id === savedAge) {
+              option.selected = true;
+              defaultSelected = true;
+            }
+            
+            dropdown.appendChild(option);
+          });
+          
+          // If no specific selection was made, select the first item
+          if (!defaultSelected && sortedCategories.length > 0) {
+            dropdown.children[0].selected = true;
+          }
+          
+          const defaultCat = sortedCategories.find(cat => cat.category_id === '999') || sortedCategories[0];
+          console.log(`Populated age dropdown with ${sortedCategories.length} categories (filtered by gender: ${filterGender || 'none'}, defaulted to: ${defaultCat?.category || 'none'})`);
+        } else {
+          // Fallback if no categories received
+          dropdown.innerHTML = '<option value="">No categories available</option>';
+        }
+      } catch (error) {
+        console.error('Failed to populate age dropdown:', error);
+        // Show error state with basic fallback
+        dropdown.innerHTML = '<option value="">Failed to load categories</option>';
+      } finally {
+        dropdown.disabled = false;
+      }
+    }
+
+    // Initialize
+    async function init() {
+      restoreSettings();
+      checkBackendStatus();
+      setupEventListeners();
+      
+      // Get initial member info for gender filtering
+      const memberInfo = getMemberInfo();
+      
+      // Populate dropdowns - age dropdown gets gender-filtered based on initial member selection
+      await Promise.all([
+        populateClassDropdown(),
+        populateAgeGroupDropdownWithGenderFilter(memberInfo.gender)
+      ]);
+    }
+
+    function restoreSettings() {
+      try {
+        // Note: Both class and age group restoration are now handled by their respective populate functions
+        
+        // Set date filter
+        const lastUpload = localStorage.getItem(LSK.lastUpload);
+        if (lastUpload) {
+          $('#fromDate').value = lastUpload;
+        } else {
+          // Default to January 1st of current year
+          const currentYear = new Date().getFullYear();
+          $('#fromDate').value = `${currentYear}-01-01`;
+        }
+      } catch (e) {
+        console.warn('Failed to restore settings:', e);
+      }
+    }
+
+    function saveSettings() {
+      if (!$('#remember').checked) return;
+      
+      try {
+        localStorage.setItem(LSK.cls, $('#defaultClass').value);
+        localStorage.setItem(LSK.age, $('#defaultAgeGroup').value);
+      } catch (e) {
+        console.warn('Failed to save settings:', e);
+      }
+    }
+
+    function clearSettings() {
+      Object.values(LSK).forEach(key => localStorage.removeItem(key));
+      location.reload();
+    }
+
+    async function checkBackendStatus() {
+      try {
+        const response = await fetch(`${CONFIG.apiBase}/api/health`);
+        if (response.ok) {
+          $('#serverStatus').innerHTML = '🟢 Backend ready';
+          $('#serverStatus').className = 'chip okay';
+        } else {
+          throw new Error('Backend not responding');
+        }
+      } catch (error) {
+        $('#serverStatus').innerHTML = '🔴 Backend offline';
+        $('#serverStatus').className = 'chip bad';
+        console.error('Backend check failed:', error);
+      }
+    }
+
+    function setupEventListeners() {
+      $('#excelFile').addEventListener('change', handleFileSelect);
+      // $('#processBtn').addEventListener('click', processScores); // Removed - upload handled from preview
+      $('#clearLocal').addEventListener('click', clearSettings);
+      
+      // Add dynamic date filtering
+      $('#fromDate').addEventListener('change', applyDateFilter);
+      
+      // Member selection change - trigger category filtering by gender
+      $('#defaultMember').addEventListener('change', onMemberChange);
+      
+      // Save settings on change
+      ['defaultClass', 'defaultAgeGroup', 'defaultMember'].forEach(id => {
+        $(`#${id}`).addEventListener('change', saveSettings);
+      });
+    }
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) {
+        $('#fileStatus').textContent = 'No file selected';
+        // $('#processBtn').disabled = true; // processBtn removed
+        $('#previewSection').style.display = 'none';
+        state.selectedFilePath = null;
+        state.rows = [];
+        return;
+      }
+
+      if (!file.name.toLowerCase().endsWith('.xlsx')) {
+        $('#fileStatus').innerHTML = '<span class="bad">Please select an Excel (.xlsx) file</span>';
+        // $('#processBtn').disabled = true; // processBtn removed
+        $('#previewSection').style.display = 'none';
+        state.selectedFilePath = null;
+        state.rows = [];
+        return;
+      }
+
+      // Parse Excel file for preview
+      parseExcelFile(file);
+    }
+
+    function setProgress(fraction) {
+      $('#progressBar').style.width = Math.max(0, Math.min(1, fraction)) * 100 + '%';
+    }
+
+    async function processScores() {
+      console.log('🎯 processScores function called!');
+      
+      if (state.processing) {
+        console.log('⚠️ Already processing, returning early');
+        return;
+      }
+      
+      console.log('✅ Starting score processing...');
+      state.processing = true;
+      // $('#processBtn').disabled = true; // processBtn removed
+      $('#resultsSection').style.display = 'none';
+      
+      try {
+        setProgress(0.1);
+        // $('#processBtn').textContent = 'Processing...'; // processBtn removed
+
+        const formData = new FormData();
+        
+        // Extract member ID from member dropdown (split on '|', take position 0)
+        const memberInfo = getMemberInfo();
+        const extractedMemberId = memberInfo.memberId || CONFIG.memberId; // fallback to config if extraction fails
+        
+        // Send the processed scores data with UUIDs instead of raw Excel file
+        const processedScores = state.filteredRows || state.rawRows || [];
+        console.log('🔍 SENDING PROCESSED SCORES:', processedScores.length, 'records with UUIDs');
+        formData.append('scores', JSON.stringify(processedScores));
+        formData.append('fromDate', $('#fromDate').value);
+        // Auth token now comes from backend environment variable
+        formData.append('memberId', extractedMemberId);
+        formData.append('defaultClass', $('#defaultClass').value);
+        formData.append('defaultAgeGroup', $('#defaultAgeGroup').value);
+        
+        console.log('Using member ID for upload:', extractedMemberId, 'from member:', memberInfo);
+
+        setProgress(0.3);
+
+        // Log the API request for debugging
+        console.log('🚀 SUBMITTING TO API:', `${CONFIG.apiBase}/api/process-scores`);
+        console.log('🚀 API REQUEST PAYLOAD:');
+        for (let [key, value] of formData.entries()) {
+          if (key === 'scores') {
+            console.log(`  ${key}:`, JSON.parse(value).slice(0, 2)); // Show first 2 records
+          } else {
+            console.log(`  ${key}:`, value);
+          }
+        }
+
+        const response = await fetch(`${CONFIG.apiBase}/api/process-scores`, {
+          method: 'POST',
+          body: formData
+        });
+
+        setProgress(0.8);
+
+        const result = await response.json();
+        
+        // Log the API response for debugging
+        console.log('📥 API RESPONSE STATUS:', response.status, response.statusText);
+        console.log('📥 API RESPONSE BODY:', result);
+        if (result.errors && result.errors.length > 0) {
+          console.log('📥 API VALIDATION ERRORS (first 3):');
+          result.errors.slice(0, 3).forEach((error, i) => {
+            console.log(`  Error ${i + 1}:`, error);
+          });
+        }
+        setProgress(1);
+
+        if (result.success) {
+          // Update last upload date
+          if (result.results.successful > 0 && $('#remember').checked) {
+            localStorage.setItem(LSK.lastUpload, new Date().toISOString().split('T')[0]);
+          }
+
+          displayResults(result);
+          
+          // Auto-download updated Excel file if available
+          if (result.downloadUrl) {
+            setTimeout(() => {
+              const downloadLink = document.createElement('a');
+              downloadLink.href = `${CONFIG.apiBase}${result.downloadUrl}`;
+              downloadLink.download = '';
+              document.body.appendChild(downloadLink);
+              downloadLink.click();
+              document.body.removeChild(downloadLink);
+              console.log('Started download of updated Excel file');
+            }, 1000); // Wait 1 second before starting download
+          }
+        } else {
+          throw new Error(result.error || 'Processing failed');
+        }
+
+      } catch (error) {
+        console.error('Processing error:', error);
+        displayError(error.message);
+      } finally {
+        state.processing = false;
+        // $('#processBtn').disabled = false; // processBtn removed
+        // $('#processBtn').textContent = 'Process & Upload Scores'; // processBtn removed
+        setProgress(0);
+      }
+    }
+
+    function displayResults(result) {
+      const { successful, failed, skipped, errors } = result.results;
+      
+      $('#resultsSection').style.display = 'block';
+      
+      let statusHtml = `
+        <div class="flex" style="gap: 16px; margin-bottom: 10px;">
+          <span class="chip okay">✅ ${successful} uploaded</span>
+          <span class="chip bad">❌ ${failed} failed</span>
+          <span class="chip muted">⏭️ ${skipped} skipped</span>
+        </div>
+        <div class="muted small">${result.message}</div>
+      `;
+
+      $('#statusDisplay').innerHTML = statusHtml;
+
+      if (errors && errors.length > 0) {
+        const errorHtml = `
+          <div class="status-box" style="background: #fff5f5; border-color: #fecaca;">
+            <strong>Errors (${errors.length}):</strong>
+            <ul style="margin: 8px 0 0 20px; font-size: 13px;">
+              ${errors.slice(0, 10).map(e => `<li>Row ${e.row}: ${e.error}</li>`).join('')}
+              ${errors.length > 10 ? `<li><em>... and ${errors.length - 10} more</em></li>` : ''}
+            </ul>
+          </div>
+        `;
+        $('#errorDetails').innerHTML = errorHtml;
+      } else {
+        $('#errorDetails').innerHTML = '';
+      }
+
+      // Show success message for good results
+      if (successful > 0 && failed === 0) {
+        $('#statusDisplay').style.background = '#f0fdf4';
+        $('#statusDisplay').style.borderColor = '#bbf7d0';
+      }
+    }
+
+    function displayError(message) {
+      $('#resultsSection').style.display = 'block';
+      $('#statusDisplay').innerHTML = `
+        <div class="bad">
+          <strong>❌ Processing failed:</strong><br>
+          ${message}
+        </div>
+      `;
+      $('#statusDisplay').style.background = '#fff5f5';
+      $('#statusDisplay').style.borderColor = '#fecaca';
+      $('#errorDetails').innerHTML = '';
+    }
+
+    // Excel parsing and validation functions
+    async function parseExcelFile(file) {
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          $('#fileStatus').innerHTML = 'Parsing Excel file...';
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          
+          if (!workbook.SheetNames.includes('Scores')) {
+            throw new Error("Excel file must contain a sheet named 'Scores'");
+          }
+          
+          const worksheet = workbook.Sheets['Scores'];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          if (jsonData.length === 0) {
+            throw new Error("Scores sheet is empty");
+          }
+
+          // Fetch all lookup data for validation
+          $('#fileStatus').innerHTML = 'Loading lookup data for validation...';
+          
+          // DEBUG: Test if functions exist before Promise.all
+          console.log('🔍 FUNCTION EXISTENCE CHECK:');
+          console.log('  fetchRoundsLookup exists:', typeof fetchRoundsLookup);
+          console.log('  fetchClassesLookup exists:', typeof fetchClassesLookup);
+          console.log('  fetchAgeGroupsLookup exists:', typeof fetchAgeGroupsLookup);
+          
+          await Promise.all([
+            fetchRoundsLookup(),
+            fetchClassesLookup(),
+            fetchAgeGroupsLookup()
+          ]);
+          
+          // Parse headers and data
+          console.log('🔍 RAW EXCEL HEADERS (before processing):', jsonData[0]);
+          const headers = jsonData[0].map(h => String(h || '').trim().toLowerCase());
+          console.log('🔍 PROCESSED HEADERS (after lowercase):', headers);
+          const rows = jsonData.slice(1);
+          
+          console.log('=== DEBUG: Record Processing Pipeline ===');
+          console.log(`Total rows in Excel (including header): ${jsonData.length}`);
+          console.log(`Data rows after removing header: ${rows.length}`);
+          
+          // Convert to objects - store ALL data as raw (no date filtering during parsing)
+          const allParsedRows = [];
+          let processingErrors = 0;
+          
+          console.log('Processing all rows without date filtering (raw data storage)');
+          
+          for (let i = 0; i < rows.length; i++) {
+            // Skip empty rows - check if row has any meaningful data
+            const rowData = rows[i];
+            if (!rowData || !rowData.some(cell => cell != null && String(cell).trim() !== '')) {
+              console.log(`Skipping empty row ${i + 2}`);
+              continue;
+            }
+
+            const row = {};
+            headers.forEach((header, idx) => {
+              row[header] = rowData[idx];
+            });
+            
+            // Normalize row but don't filter by date here
+            try {
+              const normalizedRow = normalizeRow(row);
+              allParsedRows.push(normalizedRow);
+            } catch (error) {
+              processingErrors++;
+              console.error(`Row ${i + 2} failed normalization:`, error, row);
+            }
+          }
+          
+          console.log(`Total records after normalization: ${allParsedRows.length} (processing errors: ${processingErrors})`);
+          console.log('=== END DEBUG ===');
+          
+          // Store all data as raw (unfiltered)
+          state.rawRows = allParsedRows;
+          
+          // Apply current date filter to set filtered rows for display
+          applyDateFilter();
+          state.selectedFilePath = file.name;
+          
+          // Status is now handled by applyDateFilter(), just show the preview
+          $('#previewSection').style.display = 'block';
+          
+        } catch (error) {
+          $('#fileStatus').innerHTML = `<span class="bad">Error: ${error.message}</span>`;
+          $('#previewSection').style.display = 'none';
+          state.rows = [];
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function parseExcelDate(dateValue) {
+      if (!dateValue) return null;
+      if (dateValue instanceof Date) return dateValue;
+      
+      // Handle Excel serial dates
+      if (typeof dateValue === 'number') {
+        return new Date((dateValue - 25569) * 86400 * 1000);
+      }
+      
+      // Handle string dates - expect UK format (dd/mm/yyyy)
+      if (typeof dateValue === 'string') {
+        // Clean the string
+        const cleaned = dateValue.trim();
+        
+        // Check for UK date format: dd/mm/yyyy or dd-mm-yyyy
+        const ukDateMatch = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if (ukDateMatch) {
+          const [, day, month, year] = ukDateMatch;
+          const dayNum = parseInt(day, 10);
+          const monthNum = parseInt(month, 10);
+          const yearNum = parseInt(year, 10);
+          
+          // Validate ranges
+          if (dayNum >= 1 && dayNum <= 31 && 
+              monthNum >= 1 && monthNum <= 12 && 
+              yearNum >= 1900 && yearNum <= 2100) {
+            // Create date using ISO format (yyyy-mm-dd) to avoid ambiguity
+            const isoDate = `${yearNum}-${monthNum.toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
+            const parsedDate = new Date(isoDate);
+            
+            // Verify the date is valid (handles Feb 30th etc.)
+            if (parsedDate.getFullYear() === yearNum && 
+                parsedDate.getMonth() === monthNum - 1 && 
+                parsedDate.getDate() === dayNum) {
+              return parsedDate;
+            }
+          }
+        }
+        
+        // Fallback - try standard parsing for other formats
+        try {
+          const fallbackDate = new Date(dateValue);
+          return isNaN(fallbackDate.getTime()) ? null : fallbackDate;
+        } catch (e) {
+          return null;
+        }
+      }
+      
+      return null;
+    }
+
+    function normalizeRow(row) {
+      // Helper function to convert text values to IDs using lookup data
+      function lookupRoundId(roundName) {
+        if (!roundName || roundName.trim() === '') return '';
+        if (!state.lookups.rounds || !Array.isArray(state.lookups.rounds)) {
+          console.warn('Rounds lookup data not available, cannot convert text to ID:', roundName);
+          return '';
+        }
+        const round = state.lookups.rounds.find(r => r.round === roundName.trim());
+        if (!round) {
+          console.warn('Round not found in lookup data:', roundName);
+        }
+        return round ? round.round_id : '';
+      }
+      
+      function lookupClassId(className) {
+        if (!className || className.trim() === '') return $('#defaultClass').value;
+        if (!state.lookups.classes || !Array.isArray(state.lookups.classes)) {
+          console.warn('Classes lookup data not available, using default:', className);
+          return $('#defaultClass').value;
+        }
+        
+        // DEBUG: Show classes API data structure
+        console.log('🔍 Looking up Class ID for text:', className);
+        console.log('🔍 Classes lookup data count:', state.lookups.classes.length);
+        if (state.lookups.classes.length > 0) {
+          console.log('🔍 FIRST CLASS OBJECT KEYS:', Object.keys(state.lookups.classes[0]));
+          console.log('🔍 FIRST CLASS OBJECT FULL:', state.lookups.classes[0]);
+          console.log('🔍 SAMPLE CLASS NAMES (first 5):', state.lookups.classes.slice(0, 5).map(c => c.bow_class || c.class_name || c.class || 'NO_NAME_FIELD'));
+        }
+        
+        const classItem = state.lookups.classes.find(c => c.bow_class === className.trim());
+        console.log('🔍 Class lookup result:', classItem ? classItem.class_id : 'NOT_FOUND');
+        if (!classItem) {
+          console.warn('Class not found in lookup data:', className);
+        }
+        return classItem ? classItem.class_id : $('#defaultClass').value;
+      }
+      
+      function lookupCategoryId(categoryName) {
+        if (!categoryName || categoryName.trim() === '') return $('#defaultAgeGroup').value;
+        if (!state.lookups.ageGroups || !Array.isArray(state.lookups.ageGroups)) {
+          console.warn('Categories lookup data not available, using default:', categoryName);
+          return $('#defaultAgeGroup').value;
+        }
+        const category = state.lookups.ageGroups.find(ag => ag.category === categoryName.trim());
+        if (!category) {
+          console.warn('Category not found in lookup data:', categoryName);
+        }
+        return category ? category.category_id : $('#defaultAgeGroup').value;
+      }
+      
+      // Convert text fields to IDs, with fallback to old field names for backward compatibility
+      let roundId = '';
+      let classId = '';
+      let categoryId = '';
+      
+      // Debug logging for text values
+      console.log('🔍 NORMALIZE ROW DEBUG - Text values from Excel:');
+      console.log('  row.round:', row.round);
+      console.log('  row.class:', row.class);
+      console.log('  row.category:', row.category);
+      console.log('  row.round_id:', row.round_id);
+      console.log('  row.class_id:', row.class_id);
+      console.log('  row.age_group_id:', row.age_group_id);
+      
+      if (row.round) {
+        // New format: text field
+        console.log('🔍 Looking up Round ID for text:', row.round);
+        roundId = lookupRoundId(row.round);
+        console.log('🔍 Round lookup result:', roundId);
+      } else if (row.round_id) {
+        // Backward compatibility: ID field
+        roundId = row.round_id;
+        console.log('🔍 Using existing round_id:', roundId);
+      }
+      
+      if (row.class) {
+        // New format: text field
+        classId = lookupClassId(row.class);
+      } else if (row.class_id) {
+        // Backward compatibility: ID field
+        classId = row.class_id;
+      } else {
+        // Default if neither exists
+        classId = $('#defaultClass').value;
+      }
+      
+      if (row.category) {
+        // New format: text field
+        console.log('🔍 Looking up Category ID for text:', row.category);
+        categoryId = lookupCategoryId(row.category);
+        console.log('🔍 Category lookup result:', categoryId);
+      } else if (row.age_group_id) {
+        // Backward compatibility: ID field
+        categoryId = row.age_group_id;
+      } else {
+        // Default if neither exists
+        categoryId = $('#defaultAgeGroup').value;
+      }
+
+      return {
+        date: row.date || '',
+        score: row.score || '',
+        location: row.location || '',
+        status: row.status || '',
+        qualifying: normalizeBool(row.qualifying, false),
+        record_qualifying: normalizeBool(row.record_qualifying, false),
+        record_status: normalizeBool(row.record_status, false),
+        round_id: roundId,
+        class_id: classId,
+        age_group_id: categoryId,
+        tens: row['10s'] || row.tens || '0',  // Default to '0' for display
+        xs: row.xs || '0',  // Default to '0' for display  
+        hits: row.hits || '0',  // Default to '0' for display
+        notes: row.notes || '',
+        uploaded: normalizeBool(row.uploaded, false),  // Add uploaded column support
+        
+        // Store raw values for validation checking
+        _rawQualifying: row.qualifying,
+        _rawRecordQualifying: row.record_qualifying,
+        _rawRecordStatus: row.record_status,
+        _rawClassId: row.class_id || classId,
+        _rawAgeGroupId: row.age_group_id || categoryId,
+        _rawRoundId: row.round_id || roundId,
+        _rawUploaded: row.uploaded,
+        
+        // Store text values for debugging
+        _textRound: row.round,
+        _textClass: row.class,
+        _textCategory: row.category,
+        
+        // Track which values were defaulted for visual feedback
+        _defaultedClassId: (!row.class && !row.class_id) || (row.class && !lookupClassId(row.class)) || (row.class_id && row.class_id.trim() === ''),
+        _defaultedAgeGroupId: (!row.category && !row.age_group_id) || (row.category && !lookupCategoryId(row.category)) || (row.age_group_id && row.age_group_id.trim() === ''),
+        _defaultedTens: !row['10s'] && !row.tens,
+        _defaultedXs: !row.xs,
+        _defaultedHits: !row.hits,
+        _defaultedQualifying: row.qualifying === undefined || row.qualifying === '',
+        _defaultedRecordQualifying: row.record_qualifying === undefined || row.record_qualifying === '',
+        _defaultedRecordStatus: row.record_status === undefined || row.record_status === ''
+      };
+    }
+
+    function normalizeBool(value, defaultValue) {
+      if (value === true || value === 'true' || value === 'TRUE' || value === 1 || value === '1') return true;
+      if (value === false || value === 'false' || value === 'FALSE' || value === 0 || value === '0') return false;
+      return defaultValue;
+    }
+
+    // Helper function to check valid boolean values
+    function isValidBool(v) {
+      if (v === undefined || v === '') return true; // Empty is valid (will default to false)
+      const s = String(v).toLowerCase();
+      return ['true', '1', 'yes', 'y', 'false', '0', 'no', 'n'].includes(s);
+    }
+
+    // Generate human-readable error messages for validation failures
+    function getValidationErrorMessages(row, errors) {
+      const messages = [];
+      
+      if (errors.includes('date')) {
+        if (!row.date) {
+          messages.push('Date is required');
+        } else {
+          const parsedDate = parseExcelDate(row.date);
+          if (!parsedDate || isNaN(parsedDate.getTime())) {
+            messages.push(`Date "${row.date}" is not a valid date format`);
+          } else {
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+            if (parsedDate > today) {
+              messages.push(`Date "${row.date}" is in the future`);
+            }
+          }
+        }
+      }
+      
+      if (errors.includes('score')) {
+        if (!row.score && row.score !== '0' && row.score !== 0) {
+          messages.push('Score is required');
+        } else {
+          const score = Number(row.score);
+          if (isNaN(score)) {
+            messages.push(`Score "${row.score}" must be a number`);
+          } else if (score < 0) {
+            messages.push(`Score "${row.score}" cannot be negative`);
+          }
+        }
+      }
+      
+      if (errors.includes('location')) {
+        messages.push('Location is required');
+      }
+      
+      if (errors.includes('round_id')) {
+        messages.push('Round ID is required and must be valid');
+      }
+      
+      if (errors.includes('status')) {
+        if (!row.status) {
+          messages.push('Status is required');
+        } else {
+          messages.push(`Status "${row.status}" must be 1 (Practice), 2 (Club Event), 3 (Club Competition), or 4 (Open Competition)`);
+        }
+      }
+      
+      if (errors.includes('10s')) {
+        const hits = Number(row.hits || 0);
+        const tens = Number(row.tens);
+        if (isNaN(tens) || tens < 0) {
+          messages.push(`10s "${row.tens}" must be a positive number`);
+        } else if (tens > hits) {
+          messages.push(`10s (${tens}) cannot exceed hits (${hits})`);
+        }
+      }
+      
+      if (errors.includes('xs')) {
+        const hits = Number(row.hits || 0);
+        const xs = Number(row.xs);
+        if (isNaN(xs) || xs < 0) {
+          messages.push(`Xs "${row.xs}" must be a positive number`);
+        } else if (xs > hits) {
+          messages.push(`Xs (${xs}) cannot exceed hits (${hits})`);
+        }
+      }
+      
+      if (errors.includes('hits')) {
+        const hits = Number(row.hits);
+        if (isNaN(hits) || hits < 0) {
+          messages.push(`Hits "${row.hits}" must be a positive number`);
+        }
+      }
+      
+      if (errors.includes('qualifying')) {
+        messages.push(`Qualifying "${row._rawQualifying}" must be true/false, yes/no, 1/0, or y/n`);
+      }
+      
+      if (errors.includes('record_qualifying')) {
+        messages.push(`Record Qualifying "${row._rawRecordQualifying}" must be true/false, yes/no, 1/0, or y/n`);
+      }
+      
+      if (errors.includes('record_status')) {
+        messages.push(`Record Status "${row._rawRecordStatus}" must be true/false, yes/no, 1/0, or y/n`);
+      }
+      
+      if (errors.includes('class_id')) {
+        messages.push('Class ID is invalid or not found in available classes');
+      }
+      
+      if (errors.includes('age_group_id')) {
+        messages.push('Age Group ID is invalid or not found in available categories');
+      }
+      
+      return messages;
+    }
+
+    function validateRow(row) {
+      const errors = [];
+      
+      // Debug logging to see what we're validating
+      console.log('🔍 VALIDATION DEBUG for row:');
+      console.log('  round:', row.round);
+      console.log('  class:', row.class); 
+      console.log('  category:', row.category);
+      console.log('  Round:', row.Round);
+      console.log('  Class:', row.Class);
+      console.log('  Category:', row.Category);
+      console.log('  round_id:', row.round_id);
+      console.log('  class_id:', row.class_id);
+      console.log('  age_group_id:', row.age_group_id);
+      console.log('  ALL COLUMN NAMES:', Object.keys(row));
+      
+      // Date validation - must be present, valid, and not in the future
+      if (!row.date) {
+        errors.push('date');
+      } else {
+        const parsedDate = parseExcelDate(row.date);
+        if (!parsedDate || isNaN(parsedDate.getTime())) {
+          errors.push('date');
+        } else {
+          // Check if date is in the future (after today)
+          const today = new Date();
+          today.setHours(23, 59, 59, 999); // End of today to allow dates throughout today
+          if (parsedDate > today) {
+            errors.push('date');
+          }
+        }
+      }
+      
+      // Score validation - must be present AND positive number (>=0)
+      if (!row.score && row.score !== '0' && row.score !== 0) {
+        errors.push('score');
+      } else {
+        const score = Number(row.score);
+        if (isNaN(score) || score < 0) {
+          errors.push('score');
+        }
+      }
+      
+      // Optional numeric fields validation (10s, xs, hits) - if present, must be positive numbers (>=0)
+      if (row.tens !== undefined && row.tens !== '' && row.tens !== null) {
+        const tens = Number(row.tens);
+        if (isNaN(tens) || tens < 0) errors.push('10s');
+      }
+      
+      if (row.xs !== undefined && row.xs !== '' && row.xs !== null) {
+        const xs = Number(row.xs);
+        if (isNaN(xs) || xs < 0) errors.push('xs');
+      }
+      
+      if (row.hits !== undefined && row.hits !== '' && row.hits !== null) {
+        const hits = Number(row.hits);
+        if (isNaN(hits) || hits < 0) errors.push('hits');
+      }
+      
+      // Cross-field validation: 10s and xs cannot exceed hits
+      const hits = Number(row.hits || 0);
+      const tens = Number(row.tens || 0);
+      const xs = Number(row.xs || 0);
+      
+      // Only validate if hits is a valid number and we have tens/xs values to check
+      if (!isNaN(hits) && hits >= 0) {
+        if (!isNaN(tens) && tens > hits) {
+          errors.push('10s');
+        }
+        if (!isNaN(xs) && xs > hits) {
+          errors.push('xs');
+        }
+      }
+      
+      // Required text fields
+      if (!row.location) errors.push('location');
+      
+      // Round validation - check ID field (which is populated by lookup conversion)
+      // FIXED: Use 'round_id' as error field name to match table header
+      if (!row.round_id || !isValidRoundId(row.round_id)) {
+        errors.push('round_id');
+        console.log('🔍 VALIDATION ERROR - Round:', { round_text: row.round, round_id: row.round_id, valid: !!row.round_id });
+      }
+      
+      // Class validation - check ID field (which is populated by lookup conversion)
+      // FIXED: Use 'class_id' as error field name to match table header
+      if (!row.class_id || !isValidClassId(row.class_id)) {
+        errors.push('class_id');
+        console.log('🔍 VALIDATION ERROR - Class:', { class_text: row.class, class_id: row.class_id, valid: !!row.class_id });
+      }
+      
+      // Category validation - check ID field (which is populated by lookup conversion)  
+      // FIXED: Use 'age_group_id' as error field name to match table header
+      if (!row.age_group_id || !isValidAgeGroupId(row.age_group_id)) {
+        errors.push('age_group_id');
+        console.log('🔍 VALIDATION ERROR - Category:', { category_text: row.category, age_group_id: row.age_group_id, valid: !!row.age_group_id });
+      }
+      
+      // Status validation - must be exactly 1, 2, 3, or 4
+      if (!row.status) {
+        errors.push('status');
+      } else {
+        const statusStr = String(row.status).trim();
+        if (!['1', '2', '3', '4'].includes(statusStr)) {
+          errors.push('status');
+        }
+      }
+      
+      // Boolean fields validation - must be valid boolean values (or empty for default false)
+      // Check original raw values before normalization
+      if (!isValidBool(row._rawQualifying)) errors.push('qualifying');
+      if (!isValidBool(row._rawRecordQualifying)) errors.push('record_qualifying');
+      if (!isValidBool(row._rawRecordStatus)) errors.push('record_status');
+      
+      return errors;
+    }
+
+    function renderPreview() {
+      const root = $('#preview');
+      if (state.rows.length === 0) {
+        root.innerHTML = '<div class="muted">No rows parsed yet.</div>';
+        // $('#processBtn').disabled = true; // processBtn removed
+        return;
+      }
+      
+      const headers = ['date', 'score', 'location', 'status', 'qualifying', 'record_qualifying', 'record_status', 'round_id', 'class_id', 'age_group_id', '10s', 'xs', 'hits', 'notes'];
+      
+      // Map technical field names to user-friendly display names
+      const headerDisplayNames = {
+        'date': 'date',
+        'score': 'score', 
+        'location': 'location',
+        'status': 'status',
+        'qualifying': 'qualifying',
+        'record_qualifying': 'record_qualifying',
+        'record_status': 'record_status',
+        'round_id': 'round',           // Show "round" instead of "round_id"
+        'class_id': 'class',           // Show "class" instead of "class_id"  
+        'age_group_id': 'category',    // Show "category" instead of "age_group_id"
+        '10s': '10s',
+        'xs': 'xs', 
+        'hits': 'hits',
+        'notes': 'notes'
+      };
+      
+      // Sort all records by date (ascending)
+      const sortedRows = [...state.rows].sort((a, b) => {
+        const dateA = parseExcelDate(a.date);
+        const dateB = parseExcelDate(b.date);
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1; // Push invalid dates to end
+        if (!dateB) return -1;
+        return dateA - dateB;
+      });
+      
+      // Separate records into uploaded (before fromDate) and new (on/after fromDate)
+      const fromDate = $('#fromDate').value;
+      const filterDate = fromDate ? new Date(fromDate) : null;
+      
+      const uploadedRecords = [];
+      const validNewRecords = [];
+      const invalidNewRecords = [];
+      
+      sortedRows.forEach(row => {
+        // FIXED: Primary check for uploaded column, fallback to date filtering
+        const rowDate = parseExcelDate(row.date);
+        const isUploadedByFlag = row.uploaded === true || row._rawUploaded === true;
+        const isUploadedByDate = filterDate && rowDate && rowDate < filterDate;
+        const isUploaded = isUploadedByFlag || isUploadedByDate;
+        
+        // Debug logging for uploaded record detection
+        if (row.uploaded === true || (row.notes && row.notes.includes('uploaded')) || String(row.date).includes('1970')) {
+          console.log('DEBUG: Uploaded record detection:', {
+            originalDate: row.date,
+            parsedDate: rowDate,
+            uploadedColumn: row.uploaded,
+            rawUploadedColumn: row._rawUploaded,
+            isUploadedByFlag: isUploadedByFlag,
+            isUploadedByDate: isUploadedByDate,
+            finalIsUploaded: isUploaded,
+            filterDate: filterDate,
+            notes: row.notes
+          });
+        }
+        
+        if (isUploaded) {
+          uploadedRecords.push(row);
+        } else {
+          const errors = validateRow(row);
+          if (errors.length > 0) {
+            invalidNewRecords.push(row);
+          } else {
+            validNewRecords.push(row);
+          }
+        }
+      });
+      
+      // Reverse-mapping functions to convert IDs back to human-readable names for display
+      function getRoundNameById(roundId) {
+        if (!roundId || !state.lookups.rounds) return roundId;
+        const round = state.lookups.rounds.find(r => r.round_id === roundId);
+        return round ? round.round : roundId; // Use 'round' field, not 'name'
+      }
+      
+      function getClassNameById(classId) {
+        if (!classId || !state.lookups.classes) return classId;
+        const archeryClass = state.lookups.classes.find(c => c.class_id === classId);
+        return archeryClass ? archeryClass.bow_class : classId; // Use 'bow_class' field, not 'name'
+      }
+      
+      function getCategoryNameById(categoryId) {
+        if (!categoryId || !state.lookups.ageGroups) return categoryId;
+        const category = state.lookups.ageGroups.find(ag => ag.category_id === categoryId);
+        return category ? category.category : categoryId; // Use 'category' field, not 'name'
+      }
+      
+      function renderTable(records, sectionClass = '') {
+        if (records.length === 0) return '';
+        
+        return [
+          `<table class="table ${sectionClass}"><thead><tr>${headers.map(h => `<th>${headerDisplayNames[h]}</th>`).join('')}</tr></thead><tbody>`,
+          ...records.map(row => {
+            const errors = validateRow(row);
+            return `<tr>${headers.map(h => {
+              let value;
+              let isDefaulted = false;
+              
+              // Handle field name mapping for display and check if defaulted
+              if (h === '10s') {
+                value = row.tens || '0';
+                isDefaulted = row._defaultedTens;
+              } else if (h === 'xs') {
+                value = row.xs || '0';
+                isDefaulted = row._defaultedXs;
+              } else if (h === 'hits') {
+                value = row.hits || '0';
+                isDefaulted = row._defaultedHits;
+              } else if (h === 'date') {
+                const parsedDate = parseExcelDate(row.date);
+                value = parsedDate ? parsedDate.toLocaleDateString('en-GB') : row.date || '';
+              } else if (h === 'round_id') {
+                // Show human-readable round name instead of UUID
+                console.log(`🔍 DEBUG: round_id field - raw value:`, row[h]);
+                value = getRoundNameById(row[h]) || '';
+                console.log(`🔍 DEBUG: round_id result after mapping:`, value);
+                isDefaulted = row._defaultedRoundId;
+              } else if (h === 'class_id') {
+                // Show human-readable class name instead of UUID
+                console.log(`🔍 DEBUG: class_id field - raw value:`, row[h]);
+                value = getClassNameById(row[h]) || '';
+                console.log(`🔍 DEBUG: class_id result after mapping:`, value);
+                isDefaulted = row._defaultedClassId;
+              } else if (h === 'age_group_id') {
+                // Show human-readable category name instead of UUID
+                console.log(`🔍 DEBUG: age_group_id field - raw value:`, row[h]);
+                value = getCategoryNameById(row[h]) || '';
+                console.log(`🔍 DEBUG: age_group_id result after mapping:`, value);
+                isDefaulted = row._defaultedAgeGroupId;
+              } else if (h === 'qualifying') {
+                // Show original invalid value if validation failed, otherwise show normalized true/false
+                const hasError = errors.includes('qualifying');
+                value = hasError ? (row._rawQualifying || '') : (row[h] ? 'true' : 'false');
+                isDefaulted = row._defaultedQualifying;
+              } else if (h === 'record_qualifying') {
+                // Show original invalid value if validation failed, otherwise show normalized true/false
+                const hasError = errors.includes('record_qualifying');
+                value = hasError ? (row._rawRecordQualifying || '') : (row[h] ? 'true' : 'false');
+                isDefaulted = row._defaultedRecordQualifying;
+              } else if (h === 'record_status') {
+                // Show original invalid value if validation failed, otherwise show normalized true/false
+                const hasError = errors.includes('record_status');
+                value = hasError ? (row._rawRecordStatus || '') : (row[h] ? 'true' : 'false');
+                isDefaulted = row._defaultedRecordStatus;
+              } else {
+                value = row[h] || '';
+              }
+              
+              const hasError = errors.includes(h);
+              let cellClass = '';
+              if (hasError) {
+                cellClass = ' class="invalid"';
+              } else if (isDefaulted) {
+                cellClass = ' class="defaulted"';
+              }
+              
+              return `<td${cellClass}>${String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;')}</td>`;
+            }).join('')}</tr>`;
+          }),
+          '</tbody></table>'
+        ].join('');
+      }
+      
+      // Build HTML with new 3-section layout
+      let html = '';
+      
+      // 1. Filtered out records section (collapsible, collapsed by default)
+      if (uploadedRecords.length > 0) {
+        html += `
+          <div class="uploaded-section">
+            <div class="section-header" onclick="toggleUploadedSection()" style="cursor: pointer; padding: 8px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; margin-bottom: 8px; user-select: none;">
+              <span>🚫 Filtered out records (${uploadedRecords.length}) - before ${fromDate ? new Date(fromDate).toLocaleDateString('en-GB') : 'filter date'}</span>
+              <span class="toggle-icon" id="uploadedToggle" style="float: right;">▶</span>
+            </div>
+            <div class="section-content" id="uploadedContent" style="display: none; margin-bottom: 16px;">
+              <div class="muted small" style="margin-bottom: 8px; background: #fff3cd; padding: 8px; border-radius: 4px; border: 1px solid #ffeaa7;">ℹ️ These records are filtered out by your date filter and will NOT be uploaded to the API.</div>
+              ${renderTable(uploadedRecords, 'uploaded-table')}
+            </div>
+          </div>
+        `;
+      }
+      
+      // 2. Valid records section (expanded)
+      if (validNewRecords.length > 0) {
+        html += `
+          <div class="valid-section">
+            <div class="section-header" style="padding: 8px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 8px;">
+              <span>✅ Valid records ready to upload (${validNewRecords.length})</span>
+            </div>
+            <div class="section-content" style="margin-bottom: 16px;">
+              ${renderTable(validNewRecords, 'valid-table')}
+            </div>
+            <div class="upload-button-section" style="padding: 12px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; text-align: center; margin-bottom: 16px;">
+              <button id="uploadValidBtn" class="btn primary" style="font-size: 16px; padding: 12px 24px;">Upload ${validNewRecords.length} valid records</button>
+            </div>
+          </div>
+        `;
+      }
+      
+      // 3. Invalid records section (expanded)
+      if (invalidNewRecords.length > 0) {
+        html += `
+          <div class="invalid-section">
+            <div class="section-header" style="padding: 8px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin-bottom: 8px;">
+              <span>❌ Invalid records with errors (${invalidNewRecords.length}) - Fix these to upload</span>
+            </div>
+            <div class="section-content">
+              ${renderTable(invalidNewRecords, 'invalid-table')}
+            </div>
+          </div>
+        `;
+      }
+      
+      // No records message
+      if (validNewRecords.length === 0 && invalidNewRecords.length === 0) {
+        html += '<div class="muted" style="text-align: center; padding: 20px;">No new records to upload based on the date filter.</div>';
+      }
+      
+      root.innerHTML = html;
+      
+      // Add event listener to the dynamic upload button if it exists
+      const uploadValidBtn = $('#uploadValidBtn');
+      if (uploadValidBtn) {
+        uploadValidBtn.addEventListener('click', processScores);
+        console.log('✅ Event listener added to uploadValidBtn');
+      }
+      
+      // Update validation summary
+      const summary = `${validNewRecords.length} valid, ${invalidNewRecords.length} with errors (${uploadedRecords.length} filtered out)`;
+      $('#validationSummary').textContent = summary;
+      
+      // Update preview status - only consider new records
+      if (validNewRecords.length === 0 && invalidNewRecords.length === 0) {
+        $('#previewStatus').innerHTML = '⚪ No new records';
+        $('#previewStatus').className = 'chip muted';
+      } else if (invalidNewRecords.length > 0 && validNewRecords.length === 0) {
+        $('#previewStatus').innerHTML = '❌ All records have errors';
+        $('#previewStatus').className = 'chip bad';
+      } else if (invalidNewRecords.length > 0) {
+        $('#previewStatus').innerHTML = '⚠️ Some records have errors';
+        $('#previewStatus').className = 'chip warning';
+      } else {
+        $('#previewStatus').innerHTML = '✅ All records ready';
+        $('#previewStatus').className = 'chip okay';
+      }
+      
+      // processBtn removed - upload button is now only in preview sections
+      // const mainUploadBtn = $('#processBtn');
+      // processBtn functionality removed - upload handled directly from preview sections
+    }
+    
+    function toggleUploadedSection() {
+      const content = $('#uploadedContent');
+      const toggle = $('#uploadedToggle');
+      
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.textContent = '▼';
+      } else {
+        content.style.display = 'none';
+        toggle.textContent = '▶';
+      }
+    }
+
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', init);
+
+    // Check backend status periodically
+    setInterval(checkBackendStatus, 30000);
+  </script>
+</body>
+</html>
