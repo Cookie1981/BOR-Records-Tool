@@ -86,3 +86,7 @@ Optional Fields:
 Once you've entered your scores, you can submit them by launching the app (detailed above), using the UI to select your file, reviewing the data it's going to post, and hitting upload.
 You should see your scores available in Golden Records fairly instantly.
 
+You can use the same files to store all your scores, or create copies with subsets of scores in: for example, one per month, or one per year.
+If you put them all in one file, there is a filer on the UI to filter out older scores by date, and Golden Records attemps to prevent duplicates being posted. However, depending on how many records you have, this file may get quite big.
+
+
